@@ -1,0 +1,9 @@
+#!/usr/bin/env php
+<?php
+
+use codemix\yii2confload\Config;
+
+require __DIR__ . '/vendor/autoload.php';
+$config = Config::bootstrap(__DIR__);
+$application = Yii::createObject('yii\console\Application', [$config->console()]);
+exit($application->run());

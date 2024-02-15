@@ -1,0 +1,29 @@
+version: '3.7'
+services:
+  app:
+    container_name: payment_microservice
+    restart: unless-stopped
+    hostname: payment_microservice
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - 8181:80
+    networks:
+      - network
+    #  FOR PRODUCTION THIS PART NEEDS TO BE OMITTED
+    volumes:
+      - ./:/app
+
+  redis:
+    image: redis
+    container_name: redisPaymentMicroservice
+    tty: true
+    ports:
+      - "6379:6379"
+    networks:
+      - network
+
+networks:
+  network:
+    driver: bridge

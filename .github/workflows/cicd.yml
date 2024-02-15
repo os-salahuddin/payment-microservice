@@ -1,0 +1,78 @@
+name: CI/CD
+
+on:
+  push:
+    branches: [ develop, main ]
+
+env:
+  AWS_REGION: ap-southeast-1
+  APPNAME: st-payment-gateway
+  S3-FILENAME: st-payment-gateway
+  S3-BUCKET: st-bitbucket-codedeploy
+
+jobs:
+  build-and-test:
+    name: CI & CD Pipeline
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+        name: Checkout Repository
+
+      # Configure AWS credentials    
+      - uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      # Deploy push to AWS S3 & Create deployment to CodeDeploy
+      - name: STG - AWS Deploy push & AWS Create Deployment
+        if: github.ref == 'refs/heads/develop'
+        env:
+            DEPLOY-GROUP: stg            
+        run: |
+          rm -rf .git         
+          aws deploy push \
+          --application-name ${{ env.APPNAME }}-${{ env.DEPLOY-GROUP }} \
+          --description "This is a revision for the ${{ env.APPNAME }}-${{ env.DEPLOY-GROUP }}-${{ github.sha }}" \
+          --no-ignore-hidden-files \
+          --s3-location s3://${{ env.S3-BUCKET }}/${{ env.S3-FILENAME }}-${{ env.DEPLOY-GROUP }}-${{ github.sha }}.zip \
+          --source .
+
+          aws deploy create-deployment \
+           --application-name ${{ env.APPNAME }}-${{ env.DEPLOY-GROUP }} \
+           --deployment-config-name CodeDeployDefault.OneAtATime \
+           --deployment-group-name ${{ env.APPNAME }}-${{ env.DEPLOY-GROUP }} \
+           --file-exists-behavior OVERWRITE \
+           --s3-location bucket=${{ env.S3-BUCKET }},key=${{ env.S3-FILENAME }}-${{ env.DEPLOY-GROUP }}-${{ github.sha }}.zip,bundleType=zip \
+
+      # Deploy push to AWS S3 & Create deployment to CodeDeploy
+      - name: PROD - AWS Deploy push & AWS Create Deployment
+        if: github.ref == 'refs/heads/main'
+        env:
+            DEPLOY-GROUP: prod            
+        run: |
+          rm -rf .git
+          
+          aws deploy push \
+          --application-name ${{ env.APPNAME }}-${{ env.DEPLOY-GROUP }} \
+          --description "This is a revision for the ${{ env.APPNAME }}-${{ env.DEPLOY-GROUP }}-${{ github.sha }}" \
+          --no-ignore-hidden-files \
+          --s3-location s3://${{ env.S3-BUCKET }}/${{ env.S3-FILENAME }}-${{ env.DEPLOY-GROUP }}-${{ github.sha }}.zip \
+          --source .
+
+          aws deploy create-deployment \
+           --application-name ${{ env.APPNAME }}-${{ env.DEPLOY-GROUP }} \
+           --deployment-config-name CodeDeployDefault.OneAtATime \
+           --deployment-group-name ${{ env.APPNAME }}-${{ env.DEPLOY-GROUP }} \
+           --file-exists-behavior OVERWRITE \
+           --s3-location bucket=${{ env.S3-BUCKET }},key=${{ env.S3-FILENAME }}-${{ env.DEPLOY-GROUP }}-${{ github.sha }}.zip,bundleType=zip \
+
+      - uses: 8398a7/action-slack@v3
+        with:
+          status: ${{ job.status }}
+          fields: repo,message,commit,author,action,eventName,ref,workflow,job,took # selectable (default: repo,message)
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK }} # required
+        if: always() # Pick up events even if the job fails or is canceled.
+
